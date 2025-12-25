@@ -1,0 +1,90 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>DietMath - User</title>
+	<style>
+		body{font-family:ui-monospace,Menlo,Consolas,monospace;margin:24px;color:#111;background:#fafafa;}
+		.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
+		.card{padding:16px;border:1px solid #ddd;border-radius:8px;background:#fff;}
+		label{display:block;margin:10px 0 4px;}
+		input,select{width:100%;padding:8px;border:1px solid #bbb;border-radius:6px;}
+		button{margin-top:12px;padding:10px 16px;border:0;border-radius:6px;background:#111;color:#fff;}
+		.button-link{display:inline-block;margin-top:12px;padding:10px 16px;border-radius:6px;background:#111;color:#fff;text-decoration:none;}
+		.message{margin-bottom:12px;padding:10px 12px;border-radius:6px;}
+		.success{background:#e7f7ed;border:1px solid #86d19a;}
+		.error{background:#fdeaea;border:1px solid #f0a5a5;}
+		.metric{font-size:20px;font-weight:600;}
+		a{color:#111;}
+		a.button-link{color:#fff;}
+	</style>
+</head>
+<body>
+	<div class="card">
+		<div style="display:flex;justify-content:space-between;align-items:center;">
+			<h1>Welcome, <span th:text="${username}">user</span></h1>
+			<form method="post" action="/logout">
+				<button type="submit">Logout</button>
+			</form>
+		</div>
+		<div class="message success" th:if="${message != ''}" th:text="${message}"></div>
+		<div class="message error" th:if="${errorMessage != ''}" th:text="${errorMessage}"></div>
+	</div>
+
+	<div class="grid">
+		<div class="card">
+			<h2>Profile</h2>
+			<form method="post" action="/user">
+				<label for="birthDate">Birth date</label>
+				<input id="birthDate" name="birthDate" type="date" th:value="${birthDate}">
+				<label for="height">Height (cm)</label>
+				<input id="height" name="height" type="number" min="1" th:value="${height}">
+
+				<h3>Weight entry</h3>
+				<div th:if="${hasWeight}">
+					<p><strong>Latest weight:</strong> <span th:text="${weightDisplay}">n/a</span> kg</p>
+					<p><strong>Goal weight:</strong> <span th:text="${goalWeightDisplay}">n/a</span> kg</p>
+					<p><strong>Goal date:</strong> <span th:text="${goalDateDisplay}">n/a</span></p>
+					<p><strong>Strategy:</strong> <span th:text="${strategyDisplay}">n/a</span></p>
+					<p><strong>Recorded at:</strong> <span th:text="${recordedAtDisplay}">n/a</span></p>
+				</div>
+				<a class="button-link" th:if="${hasWeight and !showWeightForm}" href="/user?edit=1">Modify</a>
+				<div th:if="${showWeightForm}">
+					<label for="weight">Weight (kg)</label>
+					<input id="weight" name="weight" type="number" step="0.1" min="1" th:value="${weightValue}">
+					<label for="goalWeight">Goal weight (kg)</label>
+					<input id="goalWeight" name="goalWeight" type="number" step="0.1" min="1" th:value="${goalWeightValue}">
+					<label for="goalDate">Goal date</label>
+					<input id="goalDate" name="goalDate" type="date" th:value="${goalDateValue}">
+					<label for="calorieStrategy">Calorie strategy</label>
+					<select id="calorieStrategy" name="calorieStrategy">
+						<option value="">Select...</option>
+						<option value="DYNAMIC"
+							th:selected="${strategyValue == T(com.dietmath.user.CalorieStrategy).DYNAMIC}">
+							Dynamic
+						</option>
+						<option value="FIXED"
+							th:selected="${strategyValue == T(com.dietmath.user.CalorieStrategy).FIXED}">
+							Fixed
+						</option>
+					</select>
+					<p th:if="${hasWeight}">This creates a new weight entry.</p>
+				</div>
+				<button type="submit">Save</button>
+			</form>
+		</div>
+
+		<div class="card">
+			<h2>BMI</h2>
+			<div class="metric" th:text="${bmiText}">BMI</div>
+		</div>
+
+		<div class="card">
+			<h2>Daily calories</h2>
+			<div class="metric" th:text="${calorieText}">Calories</div>
+			<p>Dynamic uses the latest weight entry. Fixed uses the first entry marked fixed.</p>
+		</div>
+	</div>
+</body>
+</html>

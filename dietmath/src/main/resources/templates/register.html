@@ -1,0 +1,33 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Register - DietMath</title>
+	<style>
+		body{font-family:ui-monospace,Menlo,Consolas,monospace;margin:24px;color:#111;background:#fafafa;}
+		.card{max-width:520px;padding:20px;border:1px solid #ddd;border-radius:8px;background:#fff;}
+		label{display:block;margin:12px 0 4px;}
+		input{width:100%;padding:10px;border:1px solid #bbb;border-radius:6px;}
+		button{margin-top:16px;padding:10px 16px;border:0;border-radius:6px;background:#111;color:#fff;}
+		.message{margin-bottom:12px;padding:10px 12px;border-radius:6px;}
+		.success{background:#e7f7ed;border:1px solid #86d19a;}
+		.error{background:#fdeaea;border:1px solid #f0a5a5;}
+		a{color:#111;}
+	</style>
+</head>
+<body>
+	<div class="card">
+		<h1>Register</h1>
+		<div class="message" th:if="${message != ''}" th:classappend="' ' + ${status}" th:text="${message}"></div>
+		<form method="post" action="/register">
+			<label for="username">Username</label>
+			<input id="username" name="username" type="text" th:value="${username}" autocomplete="username" required>
+			<label for="password">Password</label>
+			<input id="password" name="password" type="password" autocomplete="new-password" required>
+			<button type="submit">Create account</button>
+		</form>
+		<p><a href="/login">Already have an account?</a></p>
+	</div>
+</body>
+</html>
