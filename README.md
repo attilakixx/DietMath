@@ -18,6 +18,42 @@ The system follows a clean client–server architecture: the backend exposes an 
 
 ---
 
+## Already Have
+
+### Ready Features
+
+- Spring Boot backend scaffold (Java, Maven)
+- PostgreSQL + Flyway migrations
+- Docker Compose for app + db
+- Home screen with links (README, DB status, login, register)
+- Registration + login flow
+- User page with profile form
+- Weight history entries
+- BMI calculator
+- Daily calorie calculator (dynamic/fixed)
+
+### Run Everything (app + db)
+
+```bash
+docker compose up --build
+```
+
+App: `http://localhost:8080`
+
+### Run Only Database (for Eclipse/local Spring Boot)
+
+```bash
+docker compose up -d db
+```
+
+### Stop Containers
+
+```bash
+docker compose down
+```
+
+---
+
 ## Architecture Overview
 
 ### Backend
@@ -156,3 +192,11 @@ Full cross-platform experience.
 ## License
 - GPL-3.0 license
 
+---
+
+## TODO
+
+- Add auth (login/token/session)
+- Build core REST API (users, foods, diary entries)
+- CSV food importer
+- CLI client for Phase 1
