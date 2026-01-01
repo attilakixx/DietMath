@@ -16,6 +16,15 @@
 		.success{background:#e7f7ed;border:1px solid #86d19a;}
 		.error{background:#fdeaea;border:1px solid #f0a5a5;}
 		.metric{font-size:20px;font-weight:600;}
+		.bmi-bar{position:relative;display:flex;height:12px;border-radius:999px;overflow:hidden;margin:10px 0 6px;}
+		.bmi-seg{height:100%;}
+		.bmi-under{background:#7db4ff;width:14%;}
+		.bmi-normal{background:#7ad39b;width:26%;}
+		.bmi-over{background:#f2c879;width:20%;}
+		.bmi-obese{background:#f08b8b;width:40%;}
+		.bmi-marker{position:absolute;top:-4px;width:12px;height:12px;border-radius:50%;background:#111;transform:translateX(-50%);}
+		.bmi-labels{display:flex;justify-content:space-between;font-size:12px;color:#555;}
+		.bmi-desc{margin-top:6px;color:#333;}
 		a{color:#111;}
 		a.button-link{color:#fff;}
 	</style>
@@ -76,8 +85,45 @@
 		</div>
 
 		<div class="card">
+			<h2>Daily weight</h2>
+			<p th:if="${hasWeight}">
+				Last: <span th:text="${weightDisplay}">n/a</span> kg
+				<span th:text="${recordedAtDisplay}">timestamp</span>
+			</p>
+			<form method="post" action="/user/weight">
+				<label for="dailyWeight">Current weight (kg)</label>
+				<input id="dailyWeight" name="dailyWeight" type="number" step="0.1" min="1" placeholder="e.g. 72.5">
+				<button type="submit">Update</button>
+			</form>
+			<p>If you use Dynamic calories, this will update your daily target.</p>
+			<p><a class="button-link" href="/user/weights">View chart</a></p>
+		</div>
+
+		<div class="card">
 			<h2>BMI</h2>
-			<div class="metric" th:text="${bmiText}">BMI</div>
+			<div th:if="${bmiHasValue}">
+				<div class="metric">
+					<span th:text="${bmiText}">BMI</span>
+					<span> - </span>
+					<span th:text="${bmiStatus}">Normal</span>
+				</div>
+				<div class="bmi-bar">
+					<div class="bmi-seg bmi-under"></div>
+					<div class="bmi-seg bmi-normal"></div>
+					<div class="bmi-seg bmi-over"></div>
+					<div class="bmi-seg bmi-obese"></div>
+					<div class="bmi-marker" th:style="'left:' + ${bmiMarkerLeft}"></div>
+				</div>
+				<div class="bmi-labels">
+					<span>18.5</span>
+					<span>25</span>
+					<span>30</span>
+				</div>
+				<p class="bmi-desc" th:text="${bmiDescription}">BMI description.</p>
+			</div>
+			<div th:if="${!bmiHasValue}">
+				<div class="metric" th:text="${bmiText}">BMI</div>
+			</div>
 		</div>
 
 		<div class="card">

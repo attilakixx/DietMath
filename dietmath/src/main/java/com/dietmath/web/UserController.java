@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 import org.springframework.http.MediaType;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import com.dietmath.user.CalorieStrategy;
 import com.dietmath.user.User;
@@ -33,6 +36,9 @@ public class UserController {
 	private static final String SESSION_USER_ID = "userId";
 	private static final double CALORIES_PER_KG = 7700.0;
 	private static final double MAINTENANCE_PER_KG = 30.0;
+	private static final double BMI_MIN = 15.0;
+	private static final double BMI_MAX = 40.0;
+	private static final ZoneId USER_ZONE = ZoneId.systemDefault();
 
 	private final UserService userService;
 	private final UserRepository userRepository;
@@ -155,6 +161,100 @@ public class UserController {
 		return "user";
 	}
 
+	@PostMapping(value = "/user/weight", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+		produces = MediaType.TEXT_HTML_VALUE)
+	public String updateDailyWeight(@RequestParam(name = "dailyWeight", required = false) String dailyWeight,
+		HttpSession session, Model model) {
+		Long userId = getUserId(session);
+		if (userId == null) {
+			return "redirect:/login";
+		}
+		User user = userService.findById(userId);
+		if (user == null) {
+			session.invalidate();
+			return "redirect:/login";
+		}
+
+		String error = validateDailyWeight(dailyWeight);
+		Optional<UserWeight> latestWeight = userWeightRepository.findTopByUserIdOrderByRecordedAtDesc(userId);
+		Optional<UserWeight> fixedBaseWeight = userWeightRepository
+			.findTopByUserIdAndCalorieStrategyOrderByRecordedAtAsc(userId, CalorieStrategy.FIXED);
+
+		if (!error.isEmpty()) {
+			populateModel(model, user, latestWeight.orElse(null), fixedBaseWeight.orElse(null),
+				false, "", error);
+			return "user";
+		}
+
+		BigDecimal weightValue = new BigDecimal(dailyWeight.trim());
+		UserWeight previous = latestWeight.orElse(null);
+		CalorieStrategy strategy = previous != null ? previous.getCalorieStrategy() : CalorieStrategy.DYNAMIC;
+		BigDecimal goalWeight = previous != null ? previous.getGoalWeight() : null;
+		LocalDate goalDate = previous != null ? previous.getGoalDate() : null;
+
+		UserWeight entry = new UserWeight(userId, weightValue, goalWeight, goalDate, strategy);
+		userWeightRepository.save(entry);
+
+		Optional<UserWeight> updatedWeight = userWeightRepository.findTopByUserIdOrderByRecordedAtDesc(userId);
+		Optional<UserWeight> updatedFixed = userWeightRepository
+			.findTopByUserIdAndCalorieStrategyOrderByRecordedAtAsc(userId, CalorieStrategy.FIXED);
+		populateModel(model, user, updatedWeight.orElse(null), updatedFixed.orElse(null),
+			false, "Daily weight updated.", "");
+		return "user";
+	}
+
+	@GetMapping(value = "/user/weights", produces = MediaType.TEXT_HTML_VALUE)
+	public String weights(@RequestParam(name = "from", required = false)
+		@DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+		HttpSession session, Model model) {
+		Long userId = getUserId(session);
+		if (userId == null) {
+			return "redirect:/login";
+		}
+		User user = userService.findById(userId);
+		if (user == null) {
+			session.invalidate();
+			return "redirect:/login";
+		}
+
+		Optional<UserWeight> firstWeight = userWeightRepository.findTopByUserIdOrderByRecordedAtAsc(userId);
+		LocalDate defaultFrom = firstWeight
+			.map(weight -> LocalDate.ofInstant(weight.getRecordedAt(), USER_ZONE))
+			.orElse(LocalDate.now());
+
+		LocalDate today = LocalDate.now();
+		LocalDate fromDate = from != null ? from : defaultFrom;
+		String note = "";
+		if (fromDate.isAfter(today)) {
+			fromDate = today;
+			note = "From date adjusted to today.";
+		}
+
+		Instant start = fromDate.atStartOfDay(USER_ZONE).toInstant();
+		Instant end = today.plusDays(1).atStartOfDay(USER_ZONE).toInstant();
+		List<UserWeight> weights = userWeightRepository
+			.findByUserIdAndRecordedAtBetweenOrderByRecordedAtAsc(userId, start, end);
+
+		List<WeightPoint> points = new ArrayList<>();
+		List<WeightRecord> records = new ArrayList<>();
+		for (UserWeight weight : weights) {
+			LocalDate date = LocalDate.ofInstant(weight.getRecordedAt(), USER_ZONE);
+			String dateIso = date.toString();
+			points.add(new WeightPoint(dateIso, weight.getWeight()));
+			records.add(new WeightRecord(formatDateDisplay(date), formatWeightDisplay(weight.getWeight())));
+		}
+
+		model.addAttribute("username", user.getUsername());
+		model.addAttribute("fromDate", fromDate.toString());
+		model.addAttribute("toDate", today.toString());
+		model.addAttribute("chartPoints", points);
+		model.addAttribute("hasPoints", !points.isEmpty());
+		model.addAttribute("weightRecords", records);
+		model.addAttribute("note", note);
+		model.addAttribute("entryCount", points.size());
+		return "weights";
+	}
+
 	@PostMapping("/logout")
 	public String logout(HttpSession session) {
 		session.invalidate();
@@ -197,21 +297,66 @@ public class UserController {
 		model.addAttribute("goalDateValue",
 			formatDateValue(latestWeight != null ? latestWeight.getGoalDate() : null));
 		model.addAttribute("strategyValue", latestWeight != null ? latestWeight.getCalorieStrategy() : null);
-		model.addAttribute("bmiText", calculateBmiText(user, latestWeight));
+		Double bmiValue = calculateBmiValue(user, latestWeight);
+		if (bmiValue == null) {
+			model.addAttribute("bmiHasValue", false);
+			model.addAttribute("bmiText", "Add height and weight to compute BMI.");
+			model.addAttribute("bmiStatus", "");
+			model.addAttribute("bmiDescription", "");
+			model.addAttribute("bmiMarkerLeft", "0%");
+		} else {
+			model.addAttribute("bmiHasValue", true);
+			model.addAttribute("bmiText", "BMI: " + roundToOneDecimal(bmiValue));
+			model.addAttribute("bmiStatus", bmiStatus(bmiValue));
+			model.addAttribute("bmiDescription", bmiDescription(bmiValue));
+			model.addAttribute("bmiMarkerLeft", bmiMarkerLeft(bmiValue));
+		}
 		model.addAttribute("calorieText", calculateCaloriesText(latestWeight, fixedBaseWeight));
 	}
 
-	private static String calculateBmiText(User user, UserWeight latestWeight) {
+	private static Double calculateBmiValue(User user, UserWeight latestWeight) {
 		if (user.getHeight() == null || latestWeight == null) {
-			return "Add height and weight to compute BMI.";
+			return null;
 		}
 		double heightMeters = user.getHeight() / 100.0;
 		if (heightMeters <= 0) {
-			return "Height must be greater than 0.";
+			return null;
 		}
 		double weight = latestWeight.getWeight().doubleValue();
 		double bmi = weight / (heightMeters * heightMeters);
-		return "BMI: " + roundToOneDecimal(bmi);
+		return bmi;
+	}
+
+	private static String bmiStatus(double bmi) {
+		if (bmi < 18.5) {
+			return "Underweight";
+		}
+		if (bmi < 25.0) {
+			return "Normal";
+		}
+		if (bmi < 30.0) {
+			return "Overweight";
+		}
+		return "Obese";
+	}
+
+	private static String bmiDescription(double bmi) {
+		if (bmi < 18.5) {
+			return "Below normal range (18.5-24.9).";
+		}
+		if (bmi < 25.0) {
+			return "Within the normal range (18.5-24.9).";
+		}
+		if (bmi < 30.0) {
+			return "Above normal range (18.5-24.9).";
+		}
+		return "Well above normal range (18.5-24.9).";
+	}
+
+	private static String bmiMarkerLeft(double bmi) {
+		double clamped = Math.max(BMI_MIN, Math.min(BMI_MAX, bmi));
+		double percent = ((clamped - BMI_MIN) / (BMI_MAX - BMI_MIN)) * 100.0;
+		return String.format(Locale.US, "%.1f%%", percent);
 	}
 
 	private static String calculateCaloriesText(UserWeight latestWeight, UserWeight fixedBaseWeight) {
@@ -295,6 +440,27 @@ public class UserController {
 			return "n/a";
 		}
 		return strategy == CalorieStrategy.FIXED ? "Fixed" : "Dynamic";
+	}
+
+	private record WeightPoint(String date, BigDecimal weight) {
+	}
+
+	private record WeightRecord(String date, String weight) {
+	}
+
+	private static String validateDailyWeight(String weight) {
+		if (weight == null || weight.isBlank()) {
+			return "Daily weight is required.";
+		}
+		try {
+			BigDecimal value = new BigDecimal(weight.trim());
+			if (value.compareTo(BigDecimal.ZERO) <= 0) {
+				return "Daily weight must be greater than 0.";
+			}
+		} catch (NumberFormatException ex) {
+			return "Daily weight must be a number.";
+		}
+		return "";
 	}
 
 }

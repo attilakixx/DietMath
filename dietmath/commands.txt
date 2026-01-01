@@ -1,0 +1,21 @@
+dietmath
+
+howgithubtoken
+
+docker compose down
+docker compose up -d db
+docker compose up --build
+
+codex resume 019b5557-5e0d-7f21-8463-ddf5a9b0d842
+
+docker compose exec db psql -U dietmath -d dietmath
+docker compose logs -f app
+docker compose up --build
+
+psql -h localhost -U dietmath -d dietmath
+
+sudo ss -lptn 'sport = :5432'
+
+docker ps
+
+localhost:8080
